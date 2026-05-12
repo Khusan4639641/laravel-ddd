@@ -1,5 +1,8 @@
 <?php
 
+use App\Domain\Order\Exceptions\InsufficientStockException;
+use App\Domain\Order\Exceptions\InvalidOrderStatusException;
+use App\Domain\Order\Exceptions\OrderNotFoundException;
 use App\Domain\Product\Exceptions\ProductNotFoundException;
 use App\Domain\User\Exceptions\UserAlreadyExistsException;
 use App\Interfaces\Http\Middleware\EnsureAdmin;
@@ -20,6 +23,24 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        $exceptions->render(function (OrderNotFoundException $exception) {
+            return response()->json([
+                'message' => $exception->getMessage(),
+            ], 404);
+        });
+
+        $exceptions->render(function (InvalidOrderStatusException $exception) {
+            return response()->json([
+                'message' => $exception->getMessage(),
+            ], 422);
+        });
+
+        $exceptions->render(function (InsufficientStockException $exception) {
+            return response()->json([
+                'message' => $exception->getMessage(),
+            ], 422);
+        });
+
         $exceptions->render(function (ProductNotFoundException $exception) {
             return response()->json([
                 'message' => $exception->getMessage(),
