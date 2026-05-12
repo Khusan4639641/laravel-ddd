@@ -4,6 +4,7 @@ use App\Interfaces\Http\Controllers\Admin\OrderController as AdminOrderControlle
 use App\Interfaces\Http\Controllers\Admin\ProductController as AdminProductController;
 use App\Interfaces\Http\Controllers\AuthController;
 use App\Interfaces\Http\Controllers\OrderController;
+use App\Interfaces\Http\Controllers\PaymentController;
 use App\Interfaces\Http\Controllers\ProductController;
 use Illuminate\Support\Facades\Route;
 
@@ -18,6 +19,10 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::get('/orders', [OrderController::class, 'index']);
     Route::get('/orders/{id}', [OrderController::class, 'show'])->whereNumber('id');
     Route::post('/orders/{id}/cancel', [OrderController::class, 'cancel'])->whereNumber('id');
+    Route::post('/orders/{id}/pay', [PaymentController::class, 'pay'])->whereNumber('id');
+
+    Route::get('/payments', [PaymentController::class, 'index']);
+    Route::get('/payments/{id}', [PaymentController::class, 'show'])->whereNumber('id');
 });
 
 Route::get('/products', [ProductController::class, 'index']);

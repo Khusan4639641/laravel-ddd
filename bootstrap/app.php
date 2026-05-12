@@ -3,6 +3,9 @@
 use App\Domain\Order\Exceptions\InsufficientStockException;
 use App\Domain\Order\Exceptions\InvalidOrderStatusException;
 use App\Domain\Order\Exceptions\OrderNotFoundException;
+use App\Domain\Payment\Exceptions\InvalidPaymentException;
+use App\Domain\Payment\Exceptions\PaymentAlreadyProcessedException;
+use App\Domain\Payment\Exceptions\PaymentNotFoundException;
 use App\Domain\Product\Exceptions\ProductNotFoundException;
 use App\Domain\User\Exceptions\UserAlreadyExistsException;
 use App\Interfaces\Http\Middleware\EnsureAdmin;
@@ -23,6 +26,24 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        $exceptions->render(function (PaymentNotFoundException $exception) {
+            return response()->json([
+                'message' => $exception->getMessage(),
+            ], 404);
+        });
+
+        $exceptions->render(function (PaymentAlreadyProcessedException $exception) {
+            return response()->json([
+                'message' => $exception->getMessage(),
+            ], 422);
+        });
+
+        $exceptions->render(function (InvalidPaymentException $exception) {
+            return response()->json([
+                'message' => $exception->getMessage(),
+            ], 422);
+        });
+
         $exceptions->render(function (OrderNotFoundException $exception) {
             return response()->json([
                 'message' => $exception->getMessage(),
