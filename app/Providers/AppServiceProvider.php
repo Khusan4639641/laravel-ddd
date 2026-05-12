@@ -2,7 +2,9 @@
 
 namespace App\Providers;
 
+use App\Domain\Product\Repositories\ProductRepositoryInterface;
 use App\Domain\User\Repositories\UserRepositoryInterface;
+use App\Infrastructure\Persistence\Eloquent\Repositories\ProductEloquentRepository;
 use App\Infrastructure\Persistence\Eloquent\Repositories\UserEloquentRepository;
 use Illuminate\Support\ServiceProvider;
 
@@ -13,6 +15,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        $this->app->bind(ProductRepositoryInterface::class, ProductEloquentRepository::class);
         $this->app->bind(UserRepositoryInterface::class, UserEloquentRepository::class);
     }
 

@@ -1,6 +1,8 @@
 <?php
 
+use App\Domain\Product\Exceptions\ProductNotFoundException;
 use App\Domain\User\Exceptions\UserAlreadyExistsException;
+use App\Interfaces\Http\Middleware\EnsureAdmin;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -13,9 +15,17 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+        $middleware->alias([
+            'admin' => EnsureAdmin::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        $exceptions->render(function (ProductNotFoundException $exception) {
+            return response()->json([
+                'message' => $exception->getMessage(),
+            ], 404);
+        });
+
         $exceptions->render(function (UserAlreadyExistsException $exception) {
             return response()->json([
                 'message' => $exception->getMessage(),
