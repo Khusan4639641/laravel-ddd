@@ -4,23 +4,28 @@ namespace App\Infrastructure\Persistence\Eloquent\Repositories;
 
 use App\Domain\Order\Entities\Order;
 use App\Domain\Order\Entities\OrderItem;
+use App\Domain\Order\Events\OrderCancelled;
+use App\Domain\Order\Events\OrderCreated;
 use App\Domain\Order\Exceptions\InsufficientStockException;
 use App\Domain\Order\Exceptions\InvalidOrderStatusException;
 use App\Domain\Order\Repositories\OrderRepositoryInterface;
 use App\Domain\Order\ValueObjects\OrderStatus;
+use App\Domain\Product\Events\ProductStockReduced;
+use App\Domain\Product\Events\ProductStockRestored;
 use App\Domain\Product\ValueObjects\ProductStatus;
 use App\Infrastructure\Persistence\Eloquent\Models\OrderItemModel;
 use App\Infrastructure\Persistence\Eloquent\Models\OrderModel;
 use App\Infrastructure\Persistence\Eloquent\Models\ProductModel;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use InvalidArgumentException;
 
 final class OrderEloquentRepository implements OrderRepositoryInterface
 {
     public function create(int $userId, array $items): Order
     {
-        return DB::transaction(function () use ($userId, $items): Order {
+        $order = DB::transaction(function () use ($userId, $items): Order {
             $items = $this->aggregateItems($items);
 
             if ($items === []) {
@@ -75,10 +80,26 @@ final class OrderEloquentRepository implements OrderRepositoryInterface
 
                 $product->stock = (int) $product->stock - $item['quantity'];
                 $product->save();
+
+                Event::dispatch(new ProductStockReduced(
+                    productId: (int) $product->id,
+                    orderId: (int) $order->id,
+                    quantity: (int) $item['quantity'],
+                    stock: (int) $product->stock,
+                ));
             }
 
             return $this->toDomain($order->load('items'));
         });
+
+        Event::dispatch(new OrderCreated(
+            orderId: $order->id(),
+            userId: $order->userId(),
+            totalAmount: $order->totalAmount(),
+            items: $this->eventItems($order),
+        ));
+
+        return $order;
     }
 
     public function allForUser(int $userId): array
@@ -123,7 +144,7 @@ final class OrderEloquentRepository implements OrderRepositoryInterface
 
     public function cancelForUser(int $id, int $userId): ?Order
     {
-        return DB::transaction(function () use ($id, $userId): ?Order {
+        $order = DB::transaction(function () use ($id, $userId): ?Order {
             $order = OrderModel::query()
                 ->where('user_id', $userId)
                 ->with('items')
@@ -147,6 +168,13 @@ final class OrderEloquentRepository implements OrderRepositoryInterface
                 if ($product !== null) {
                     $product->stock = (int) $product->stock + (int) $item->quantity;
                     $product->save();
+
+                    Event::dispatch(new ProductStockRestored(
+                        productId: (int) $product->id,
+                        orderId: (int) $order->id,
+                        quantity: (int) $item->quantity,
+                        stock: (int) $product->stock,
+                    ));
                 }
             }
 
@@ -155,6 +183,17 @@ final class OrderEloquentRepository implements OrderRepositoryInterface
 
             return $this->toDomain($order->refresh()->load('items'));
         });
+
+        if ($order !== null) {
+            Event::dispatch(new OrderCancelled(
+                orderId: $order->id(),
+                userId: $order->userId(),
+                totalAmount: $order->totalAmount(),
+                items: $this->eventItems($order),
+            ));
+        }
+
+        return $order;
     }
 
     public function complete(int $id): ?Order
@@ -231,6 +270,22 @@ final class OrderEloquentRepository implements OrderRepositoryInterface
             subtotal: (int) $item->subtotal,
             createdAt: $item->created_at?->toISOString(),
             updatedAt: $item->updated_at?->toISOString(),
+        );
+    }
+
+    /**
+     * @return list<array{product_id: int, quantity: int, price: int, subtotal: int}>
+     */
+    private function eventItems(Order $order): array
+    {
+        return array_map(
+            fn (OrderItem $item): array => [
+                'product_id' => $item->productId(),
+                'quantity' => $item->quantity(),
+                'price' => $item->price(),
+                'subtotal' => $item->subtotal(),
+            ],
+            $order->items(),
         );
     }
 }

@@ -2,8 +2,10 @@
 
 namespace App\Infrastructure\Persistence\Eloquent\Repositories;
 
+use App\Domain\Order\Events\OrderPaid;
 use App\Domain\Order\ValueObjects\OrderStatus;
 use App\Domain\Payment\Entities\Payment;
+use App\Domain\Payment\Events\PaymentFailed;
 use App\Domain\Payment\Exceptions\InvalidPaymentException;
 use App\Domain\Payment\Exceptions\PaymentAlreadyProcessedException;
 use App\Domain\Payment\Exceptions\PaymentNotFoundException;
@@ -14,6 +16,7 @@ use App\Infrastructure\Persistence\Eloquent\Models\OrderModel;
 use App\Infrastructure\Persistence\Eloquent\Models\PaymentModel;
 use App\Infrastructure\Services\FakePaymentProvider;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 
 final readonly class PaymentEloquentRepository implements PaymentRepositoryInterface
 {
@@ -21,7 +24,7 @@ final readonly class PaymentEloquentRepository implements PaymentRepositoryInter
 
     public function payOrder(int $orderId, int $userId, int $amount, PaymentProvider $provider): Payment
     {
-        return DB::transaction(function () use ($orderId, $userId, $amount, $provider): Payment {
+        $payment = DB::transaction(function () use ($orderId, $userId, $amount, $provider): Payment {
             $order = OrderModel::query()
                 ->whereKey($orderId)
                 ->lockForUpdate()
@@ -65,6 +68,24 @@ final readonly class PaymentEloquentRepository implements PaymentRepositoryInter
 
             return $this->toDomain($payment->refresh());
         });
+
+        if ($payment->status()->isSuccess()) {
+            Event::dispatch(new OrderPaid(
+                orderId: $payment->orderId(),
+                paymentId: $payment->id(),
+                userId: $payment->userId(),
+                amount: $payment->amount(),
+            ));
+        } else {
+            Event::dispatch(new PaymentFailed(
+                paymentId: $payment->id(),
+                orderId: $payment->orderId(),
+                userId: $payment->userId(),
+                amount: $payment->amount(),
+            ));
+        }
+
+        return $payment;
     }
 
     public function allForUser(int $userId): array

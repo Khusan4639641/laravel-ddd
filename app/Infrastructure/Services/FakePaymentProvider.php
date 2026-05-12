@@ -4,7 +4,7 @@ namespace App\Infrastructure\Services;
 
 use Illuminate\Support\Str;
 
-final class FakePaymentProvider
+class FakePaymentProvider
 {
     /**
      * @return array{successful: bool, transaction_id: string|null}
